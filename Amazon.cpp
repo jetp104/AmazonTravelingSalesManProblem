@@ -5,6 +5,11 @@
 #include <limits>
 #include <ctime>
 #include <cstdlib>
+#include <map>
+
+// Constants
+const int WORK_DAY_MINUTES = 480; // 9 AM to 5 PM is 480 minutes
+const double MAX_COORDINATE = 100.0; // Maximum coordinate value for distance calculation
 
 // Address class to store coordinates
 class Address {
@@ -90,8 +95,8 @@ std::vector<Address> opt2Heuristic(std::vector<Address> path) {
 }
 
 // Function to print the path with prime addresses highlighted
-void printPath(const std::vector<Address>& path, int truckNumber) {
-    std::cout << "Truck " << truckNumber << " Path: ";
+void printPath(const std::vector<Address>& path, int truckNumber, int day) {
+    std::cout << "Truck " << truckNumber << " Day " << day << " Path: ";
     for (const auto& addr : path) {
         if (addr.isPrime) {
             std::cout << "[" << addr.x << ", " << addr.y << "] "; // Highlight prime addresses with brackets
@@ -100,6 +105,78 @@ void printPath(const std::vector<Address>& path, int truckNumber) {
         }
     }
     std::cout << std::endl;
+}
+
+// Function to print day-wise routes
+void printDayWiseRoutes(const std::map<int, std::vector<Address>>& dayWiseRoutes, int truckNumber) {
+    for (const auto& [day, route] : dayWiseRoutes) {
+        printPath(route, truckNumber, day);
+    }
+}
+
+// Function to simulate truck delivery with day tracking
+std::map<int, std::vector<Address>> simulateDelivery(std::vector<Address>& addresses, int truckNumber) {
+    std::map<int, std::vector<Address>> dayWiseRoutes;
+    std::vector<Address> unvisitedAddresses = addresses;
+
+    Address current(0, 0, false); // Start at depot
+    int day = 1;
+    int elapsedTime = 0; // Time in minutes
+
+    std::vector<Address> currentDayRoute;
+    currentDayRoute.push_back(current);
+
+    while (!unvisitedAddresses.empty()) {
+        auto nearest = std::min_element(unvisitedAddresses.begin(), unvisitedAddresses.end(),
+                                        [&current](const Address& a, const Address& b) {
+                                            return current.distanceTo(a) < current.distanceTo(b);
+                                        });
+
+        double distanceToNearest = current.distanceTo(*nearest);
+        if (elapsedTime + static_cast<int>(distanceToNearest) > WORK_DAY_MINUTES) {
+            // Store the route for the current day
+            currentDayRoute.push_back(Address(0, 0, false)); // Return to depot
+            dayWiseRoutes[day] = currentDayRoute;
+
+            // Prepare for the next day
+            day++;
+            elapsedTime = 0;
+            currentDayRoute.clear();
+            currentDayRoute.push_back(Address(0, 0, false)); // Start at depot for the new day
+
+            // Recalculate the nearest address
+            nearest = std::min_element(unvisitedAddresses.begin(), unvisitedAddresses.end(),
+                                       [&current](const Address& a, const Address& b) {
+                                           return current.distanceTo(a) < current.distanceTo(b);
+                                       });
+        }
+
+        // Visit the nearest address
+        currentDayRoute.push_back(*nearest);
+        elapsedTime += static_cast<int>(distanceToNearest);
+        current = currentDayRoute.back();
+        unvisitedAddresses.erase(nearest);
+
+        if (elapsedTime >= WORK_DAY_MINUTES) {
+            // Store the route for the current day
+            currentDayRoute.push_back(Address(0, 0, false)); // Return to depot
+            dayWiseRoutes[day] = currentDayRoute;
+
+            // Prepare for the next day
+            day++;
+            elapsedTime = 0;
+            currentDayRoute.clear();
+            currentDayRoute.push_back(Address(0, 0, false)); // Start at depot for the new day
+        }
+    }
+
+    // Store any remaining addresses for the last day
+    if (!currentDayRoute.empty()) {
+        currentDayRoute.push_back(Address(0, 0, false)); // Return to depot
+        dayWiseRoutes[day] = currentDayRoute;
+    }
+
+    return dayWiseRoutes;
 }
 
 // Main function
@@ -138,39 +215,41 @@ int main() {
     sortedAddresses.insert(sortedAddresses.end(), primeAddresses.begin(), primeAddresses.end());
     sortedAddresses.insert(sortedAddresses.end(), nonPrimeAddresses.begin(), nonPrimeAddresses.end());
 
-    // Split the sorted list into two sets for two trucks, ensuring primes are distributed correctly
+    // Split the sorted list into two sets for two trucks
     size_t splitIndex = sortedAddresses.size() / 2;
     std::vector<Address> truck1Addresses(sortedAddresses.begin(), sortedAddresses.begin() + splitIndex);
     std::vector<Address> truck2Addresses(sortedAddresses.begin() + splitIndex, sortedAddresses.end());
 
-    // Print and optimize paths for Truck 1
-    std::cout << "Greedy optimization for Truck 1:\n";
+    // Create instances of route optimizers
     GreedyOptimizer greedyOptimizer;
-    std::vector<Address> truck1Path = greedyOptimizer.optimize(truck1Addresses);
-    double truck1Distance = calculateTotalDistance(truck1Path);
-    std::cout << "Truck 1 Greedy Path Distance: " << truck1Distance << std::endl;
-    printPath(truck1Path, 1);
+    
+    // Simulate delivery for Truck 1 and Truck 2 with Greedy Algorithm
+    std::cout << "Simulating delivery for Truck 1 with Greedy Algorithm:\n";
+    auto truck1DayWiseRoutesGreedy = simulateDelivery(truck1Addresses, 1);
+    std::cout << "Simulating delivery for Truck 2 with Greedy Algorithm:\n";
+    auto truck2DayWiseRoutesGreedy = simulateDelivery(truck2Addresses, 2);
 
-    // Print and optimize paths for Truck 2
-    std::cout << "Greedy optimization for Truck 2:\n";
-    std::vector<Address> truck2Path = greedyOptimizer.optimize(truck2Addresses);
-    double truck2Distance = calculateTotalDistance(truck2Path);
-    std::cout << "Truck 2 Greedy Path Distance: " << truck2Distance << std::endl;
-    printPath(truck2Path, 2);
+    // Print day-wise routes for Greedy Algorithm
+    std::cout << "Greedy Algorithm:\n";
+    std::cout << "Truck 1:\n";
+    printDayWiseRoutes(truck1DayWiseRoutesGreedy, 1);
+    std::cout << "Truck 2:\n";
+    printDayWiseRoutes(truck2DayWiseRoutesGreedy, 2);
 
-    // Print and optimize paths with OPT2 heuristic for Truck 1
-    std::cout << "OPT2 heuristic for Truck 1:\n";
-    std::vector<Address> truck1Opt2Path = opt2Heuristic(truck1Addresses);
-    double truck1Opt2Distance = calculateTotalDistance(truck1Opt2Path);
-    std::cout << "Truck 1 OPT2 Path Distance: " << truck1Opt2Distance << std::endl;
-    printPath(truck1Opt2Path, 1);
+    // Apply OPT2 Heuristic
+    std::cout << "Simulating delivery for Truck 1 with OPT2 Heuristic:\n";
+    auto truck1AddressesOpt2 = opt2Heuristic(truck1Addresses);
+    auto truck1DayWiseRoutesOpt2 = simulateDelivery(truck1AddressesOpt2, 1);
+    std::cout << "Simulating delivery for Truck 2 with OPT2 Heuristic:\n";
+    auto truck2AddressesOpt2 = opt2Heuristic(truck2Addresses);
+    auto truck2DayWiseRoutesOpt2 = simulateDelivery(truck2AddressesOpt2, 2);
 
-    // Print and optimize paths with OPT2 heuristic for Truck 2
-    std::cout << "OPT2 heuristic for Truck 2:\n";
-    std::vector<Address> truck2Opt2Path = opt2Heuristic(truck2Addresses);
-    double truck2Opt2Distance = calculateTotalDistance(truck2Opt2Path);
-    std::cout << "Truck 2 OPT2 Path Distance: " << truck2Opt2Distance << std::endl;
-    printPath(truck2Opt2Path, 2);
+    // Print day-wise routes for OPT2 Heuristic
+    std::cout << "OPT2 Heuristic:\n";
+    std::cout << "Truck 1:\n";
+    printDayWiseRoutes(truck1DayWiseRoutesOpt2, 1);
+    std::cout << "Truck 2:\n";
+    printDayWiseRoutes(truck2DayWiseRoutesOpt2, 2);
 
     return 0;
 }
