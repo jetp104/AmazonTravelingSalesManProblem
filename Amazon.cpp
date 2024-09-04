@@ -113,10 +113,10 @@ int main() {
     // Initialize random seed
     std::srand(std::time(0));
 
-    std::cout << "Enter the addresses (x y):\n";
+    // Generate random addresses
     for (int i = 0; i < numAddresses; ++i) {
-        int x, y;
-        std::cin >> x >> y;
+        int x = std::rand() % 100; // Random x coordinate between 0 and 99
+        int y = std::rand() % 100; // Random y coordinate between 0 and 99
         bool isPrime = std::rand() % 2; // Randomly assign prime status (0 or 1)
         addresses.emplace_back(x, y, isPrime);
     }
